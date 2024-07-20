@@ -54,7 +54,7 @@ lstm_lr                 = 0.001             # Learning Rate             0.001
 lstm_n_epochs           = 500               # Number of epochs          1000
 lstm_time_window        = 5                # Sequence Length           10
 lstm_decay_L2           = None
-lstm_dropout            = 0.1                 # Dropout Percentage        0.75
+lstm_dropout            = 0.75                 # Dropout Percentage        0
 # =================================================================================
 
 # Neural Network
@@ -300,17 +300,14 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
                 pos_norm_sorted        = pos_norm[sorted_indices]
                 
                 # Filter the classes that contain only one observation
-                
-                # class_values, class_counts = np.unique(beam_data_sorted, return_counts=True)
-                #     # Get the values of those classes 
-                # low_class_values = list(class_values[np.where(class_counts <= 2)[0]])
-                # for low_class_value in low_class_values:
-                #     # Get the indx of this value
-                #     deleted_indices = np.where(beam_data_sorted == low_class_value)
-                #     beam_data_sorted = np.delete(beam_data_sorted, deleted_indices)
-                #     pos_norm_sorted = np.delete(pos_norm_sorted, deleted_indices, axis=0)
-                    
-                # class_values, class_counts = np.unique(beam_data_sorted, return_counts=True)
+                class_values, class_counts = np.unique(beam_data_sorted, return_counts=True)
+                    # Get the values of those classes 
+                low_class_values = list(class_values[np.where(class_counts <= 2)[0]])
+                for low_class_value in low_class_values:
+                    # Get the indx of this value
+                    deleted_indices = np.where(beam_data_sorted == low_class_value)
+                    beam_data_sorted = np.delete(beam_data_sorted, deleted_indices)
+                    pos_norm_sorted = np.delete(pos_norm_sorted, deleted_indices, axis=0)
                 
                 
                 for i in np.arange(n_past, len(pos_norm)):
@@ -320,27 +317,37 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
                     # print('X Time: {}:{}'.format((i-n_past), (i)))
                     # print('Y Time: {}'.format(i-1))
 
-                X_lstm, Y_lstm  = np.array(X_lstm), np.array(Y_lstm)
-                Y_lstm          = Y_lstm - 1 
+                X_lstm, Y_lstm = np.array(X_lstm), np.array(Y_lstm)
                 print('X_lstm shape == {}.'.format(X_lstm.shape))
                 print('Y_lstm shape == {}.'.format(Y_lstm.shape))
                 print()
 
+                # Taking a copy of the Y_lstm for stratifying sampling.
+                Y_lstm_copy = Y_lstm.copy()
+
+                # Converting The Y-values to one-hot-encoded data
+                class_categories = np.sort(np.unique(Y_lstm_copy)).tolist()
+                one_hot_encoder = OneHotEncoder(categories=[class_categories], 
+                                                sparse=False)
+                
+                Y_lstm          = np.reshape(Y_lstm, (Y_lstm.shape[0], 1))
+                Y_lstm          = one_hot_encoder.fit_transform(Y_lstm)
+                
 
                 # Train, Validation, Test  split.
                 x_train_LSTM, x_test_LSTM, y_train_LSTM, y_test_LSTM = train_test_split(X_lstm, Y_lstm,
                                                                                         # stratif=None, 
-                                                                                        # stratify=Y_lstm, 
+                                                                                        stratify=Y_lstm_copy, 
                                                                                         test_size=(train_val_test_split[2]/100),
-                                                                                        shuffle=True,
+                                                                                        # shuffle=True,
                                                                                         random_state=50)
                 
                 # Getting the validation data
                 x_train_LSTM, x_val_LSTM, y_train_LSTM, y_val_LSTM = train_test_split(x_train_LSTM, y_train_LSTM,
-                                                                        # stratify= y_train_LSTM,
+                                                                        stratify= one_hot_encoder.inverse_transform(y_train_LSTM),
                                                                         # stratify=None,    
                                                                         test_size=(train_val_test_split[1]/(100 - train_val_test_split[2])),
-                                                                        shuffle=True,
+                                                                        # shuffle=True,
                                                                         random_state=50)
 
                 # REMEMBER TO GET Y_power
@@ -472,14 +479,12 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
             x_test_LSTM     = torch.from_numpy(x_test_LSTM).type(torch.float32).to(device)
             x_val_LSTM      = torch.from_numpy(x_val_LSTM).type(torch.float32).to(device)
 
-            y_train_LSTM    = torch.from_numpy(y_train_LSTM).to(device)
-            y_test_LSTM     = torch.from_numpy(y_test_LSTM).to(device)
-            y_val_LSTM      = torch.from_numpy(y_val_LSTM).to(device)
+            y_train_LSTM    = torch.from_numpy(y_train_LSTM).type(torch.float32).to(device)
+            y_test_LSTM     = torch.from_numpy(y_test_LSTM).type(torch.float32).to(device)
+            y_val_LSTM      = torch.from_numpy(y_val_LSTM).type(torch.float32).to(device)
             
             # Create LSTM Model
-            class_values, class_counts = np.unique(beam_data_sorted, return_counts=True)
-            NUM_OF_CLASSES = len(class_values)
-            lstm_model  = func.MY_LSTM(num_classes  = NUM_OF_CLASSES,
+            lstm_model  = func.MY_LSTM(num_classes  = y_train_LSTM.shape[1],
                                        input_size   = x_train_LSTM.shape[2],
                                        hidden_size  = nodes_per_lstm_layer,
                                        num_layers   = lstm_layers,
@@ -566,12 +571,20 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
 
             # Test model on test data
             y_test  = y_test_LSTM.cpu().numpy()
+            y_test  = one_hot_encoder.inverse_transform(y_test)
             
             
             y_pred     = lstm_model(x_test_LSTM)
             pred_beams = torch.topk(y_pred, y_pred.shape[1])[1]
             pred_beams = pred_beams.cpu().numpy()
-
+            pred_beams_copy = pred_beams.copy()
+            
+            class_values, class_counts  = np.unique(beam_data_sorted, return_counts=True)
+            class_values                = np.sort(class_values)
+            
+            for indx, pred_beam in enumerate(pred_beams_copy):
+                pred_beams[indx]  = class_values[pred_beam]
+                # print(class_values[pred_beam])
                 
         # =================================================================================
             
