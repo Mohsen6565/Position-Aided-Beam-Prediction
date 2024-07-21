@@ -14,12 +14,15 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.image as mplimage
 
+from tqdm import tqdm
+
 import torch as t
 import torch.cuda as cuda
 import torch.optim as optimizer
 import torch.nn as nn
 import torchvision.transforms as transf
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset, Dataset
+import torch.optim as optim
 from torch.autograd import Variable 
 
 def get_experiment_name(scen_idx, n_beams, norm_type, noise):
@@ -1285,105 +1288,151 @@ class MY_LSTM(nn.Module):
 # =================================================================================
 # MOHSEN ========================================================================== 
 # LSTM Training 
-# def train_lstm(x_train_LSTM, x_test_LSTM, x_val_LSTM, y_train_LSTM, y_test_LSTM, y_val_LSTM,
-#                nodes_per_lstm_layer, lstm_layers, lstm_dropout, lstm_lr, 
-#                lstm_train_batch_size, lstm_n_epochs, device, save_model=True
-#                ):
-#     # Converting all the used data to pytorch tensors and utilize the available GPU
-#     x_train_LSTM    = torch.from_numpy(x_train_LSTM).type(torch.float32).to(device)
-#     x_test_LSTM     = torch.from_numpy(x_test_LSTM).type(torch.float32).to(device)
-#     x_val_LSTM      = torch.from_numpy(x_val_LSTM).type(torch.float32).to(device)
-
-#     y_train_LSTM    = torch.from_numpy(y_train_LSTM).type(torch.float32).to(device)
-#     y_test_LSTM     = torch.from_numpy(y_test_LSTM).type(torch.float32).to(device)
-#     y_val_LSTM      = torch.from_numpy(y_val_LSTM).type(torch.float32).to(device)
-
-#         # Create LSTM Model
-#     lstm_model  = MY_LSTM(num_classes  = y_train_LSTM.shape[1],
-#                             input_size   = x_train_LSTM.shape[2],
-#                             hidden_size  = nodes_per_lstm_layer,
-#                             num_layers   = lstm_layers,
-#                             seq_length   = x_train_LSTM.shape[1],
-#                             dropout      = lstm_dropout,
-#                             my_device    = device).to(device)
+def train_lstm(x_train_LSTM, x_test_LSTM, x_val_LSTM, y_train_LSTM, y_test_LSTM, y_val_LSTM,
+                nodes_per_lstm_layer, lstm_layers, lstm_dropout, lstm_lr, 
+                lstm_train_batch_size, lstm_n_epochs, device, BEST_LSTM_MODEL_PATH
+                ):
+    # if quantize_input:
+    #     n_bins = 200
+    #     x_train_LSTM = np.round(x_train_LSTM / (1/n_bins)) * (1/n_bins)
     
-#     print('The LSTM Model: {}'.format(lstm_model))
-
-#     # Train model on provided data + Write results to run_folder
-#     criterion = torch.nn.CrossEntropyLoss()    
-#     optimizer = torch.optim.Adam(lstm_model.parameters(), lr=lstm_lr) 
-#     # Initialize the learning rate scheduler
-#     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)
-
-#     # Preparing data for loaders
-#     train_dataset           = TensorDataset(x_train_LSTM, y_train_LSTM)
-#     validation_dataset      = TensorDataset(x_val_LSTM, y_val_LSTM)
-#     test_dataset            = TensorDataset(x_test_LSTM, y_test_LSTM)
-
-#     # Data Loaders
-#     train_loader            = DataLoader(train_dataset, batch_size=lstm_train_batch_size, shuffle=True)
-#     validation_loader       = DataLoader(validation_dataset, batch_size=lstm_train_batch_size, shuffle=False)
-#     test_loader             = DataLoader(test_dataset, batch_size=lstm_train_batch_size, shuffle=False)
-
-#     # Begin The Training Loop
-#     best_val_loss = np.inf
-#     train_loss_list = []
-#     val_loss_list = []
+    # Converting all the used data to pytorch tensors and utilize the available GPU
+    device  = ('cuda' if t.cuda.is_available() else 'cpu')
+    x_train_LSTM    = t.from_numpy(x_train_LSTM).type(t.float32).to(device)
+    x_test_LSTM     = t.from_numpy(x_test_LSTM).type(t.float32).to(device)
+    x_val_LSTM      = t.from_numpy(x_val_LSTM).type(t.float32).to(device)
     
-#     for epoch in np.arange(lstm_n_epochs):
-#         lstm_model.train()
-#         total_loss = 0.0
-#         for inputs, targets in tqdm(train_loader):
-#             optimizer.zero_grad()
-#             # print('Inputs: {}'.format(inputs.shape))
-#             # print('targets: {}'.format(targets.shape))
-#             inputs  = inputs.to(device)
-#             targets = targets.to(device)
-#             outputs = lstm_model(inputs)
-#             # print('outputs: {}'.format(outputs.shape))
-#             # print('='*50)
-#             loss = criterion(outputs, targets)
-#             loss.backward()
-#             # torch.nn.utils.clip_grad_norm_(lstm_model.parameters(), max_norm=1.0)
-#             optimizer.step()
-#             total_loss += loss.item() 
-
-#         # Calculate average training loss
-#         train_loss = total_loss / len(train_loader)
-#         train_loss_list.append(train_loss)
-
-#         # Validation loop
-#         lstm_model.eval()
-#         with torch.no_grad():
-#             total_loss = 0.0
-#             for inputs, targets in tqdm(validation_loader):
-#                 inputs  = inputs.to(device)
-#                 targets = targets.to(device)
-#                 # print('Inputs: {}'.format(inputs.shape))
-#                 # print('targets: {}'.format(targets.shape))
-#                 outputs = lstm_model(inputs)
-#                 # print('outputs: {}'.format(outputs.shape))
-#                 # print('='*50)
-#                 loss = criterion(outputs, targets)
-#                 total_loss += loss.item()
-
-#             # Calculate average validation loss
-#             val_loss = total_loss / len(validation_loader)
-#             val_loss_list.append(val_loss)
-#             # Inside your training loop after evaluating on validation set
-#             if val_loss < best_val_loss:
-#                 # Update best_val_loss
-#                 best_val_loss = val_loss
-#                 # Save the model parameters
-#                 # print('Saving Model to {}'.format(MODEL_PATH))
-#                 # torch.save(model.state_dict(), MODEL_PATH + 'best_model.pth')
+    y_train_LSTM    = t.from_numpy(y_train_LSTM).to(device)
+    y_test_LSTM     = t.from_numpy(y_test_LSTM).to(device)
+    y_val_LSTM      = t.from_numpy(y_val_LSTM).to(device)
+    
+    # Create LSTM Model
+    class_values, class_counts = np.unique(y_train_LSTM, return_counts=True)
+    NUM_OF_CLASSES = len(class_values)
+    lstm_model  = MY_LSTM(num_classes  = NUM_OF_CLASSES,
+                               input_size   = x_train_LSTM.shape[2],
+                               hidden_size  = nodes_per_lstm_layer,
+                               num_layers   = lstm_layers,
+                               seq_length   = x_train_LSTM.shape[1],
+                               dropout      = lstm_dropout,
+                               my_device    = device).to(device)
+    
+    print('The LSTM Model: {}'.format(lstm_model))
+    # Train model on provided data + Write results to run_folder
+    criterion = t.nn.CrossEntropyLoss()    
+    optimizer = t.optim.Adam(lstm_model.parameters(), lr=lstm_lr) 
+    # Initialize the learning rate scheduler
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)
+    
+    # Preparing data for loaders
+    train_dataset           = TensorDataset(x_train_LSTM, y_train_LSTM)
+    validation_dataset      = TensorDataset(x_val_LSTM, y_val_LSTM)
+    test_dataset            = TensorDataset(x_test_LSTM, y_test_LSTM)
+    
+    # Data Loaders
+    train_loader            = DataLoader(train_dataset, batch_size=lstm_train_batch_size, shuffle=True)
+    validation_loader       = DataLoader(validation_dataset, batch_size=lstm_train_batch_size, shuffle=False)
+    test_loader             = DataLoader(test_dataset, batch_size=lstm_train_batch_size, shuffle=False)
+    
+    # Begin The Training Loop
+    best_val_loss = np.inf
+    train_loss_list = []
+    val_loss_list = []
+    
+    for epoch in np.arange(lstm_n_epochs):
+        lstm_model.train()
+        total_loss = 0.0
+        for inputs, targets in tqdm(train_loader):
+            optimizer.zero_grad()
+            # print('Inputs: {}'.format(inputs.shape))
+            # print('targets: {}'.format(targets.shape))
+            inputs  = inputs.to(device)
+            targets = targets.to(device)
+            outputs = lstm_model(inputs)
+            # print('outputs: {}'.format(outputs.shape))
+            # print('='*50)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            # t.nn.utils.clip_grad_norm_(lstm_model.parameters(), max_norm=1.0)
+            optimizer.step()
+            total_loss += loss.item() 
+    
+        # Calculate average training loss
+        train_loss = total_loss / len(train_loader)
+        train_loss_list.append(train_loss)
+    
+        # Validation loop
+        lstm_model.eval()
+        with t.no_grad():
+            total_loss = 0.0
+            for inputs, targets in tqdm(validation_loader):
+                inputs  = inputs.to(device)
+                targets = targets.to(device)
+                # print('Inputs: {}'.format(inputs.shape))
+                # print('targets: {}'.format(targets.shape))
+                outputs = lstm_model(inputs)
+                # print('outputs: {}'.format(outputs.shape))
+                # print('='*50)
+                loss = criterion(outputs, targets)
+                total_loss += loss.item()
+    
+            # Calculate average validation loss
+            val_loss = total_loss / len(validation_loader)
+            val_loss_list.append(val_loss)
+            # Inside your training loop after evaluating on validation set
+            if val_loss < best_val_loss:
+                # Update best_val_loss
+                best_val_loss = val_loss
+                # Save the model parameters
+                print('Saving Model to {}'.format(BEST_LSTM_MODEL_PATH))
+                # t.save(lstm_model.state_dict(), BEST_LSTM_MODEL_PATH)
+                t.save(lstm_model, BEST_LSTM_MODEL_PATH)
                 
-#         # scheduler.step(val_loss)
+        # scheduler.step(val_loss)
+    
+        print(f'Epoch {epoch+1}/{lstm_n_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
+        print('*-'*50)
+        
+    lstm_model = t.load(BEST_LSTM_MODEL_PATH)
+    lstm_model.eval()
 
-#         print(f'Epoch {epoch+1}/{lstm_n_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
-#         print('*-'*50)
+    return lstm_model, train_loss_list, val_loss_list
 
-#         return lstm_model, train_loss_list, val_loss_list
+
+# =================================================================================
+# MOHSEN ========================================================================== 
+def sigmoid(x, w, c):
+    return 1 / (1 + np.exp(-(np.dot(x, w) + c)))
+
+class ELM(nn.Module):
+    def __init__(self, n_hidden_neorons):
+        self.L                      = n_hidden_neorons      # Number of hidden neurons
+        
+    def fit(self, X, Y, C=1):
+        self.X      = X         # Input data  (NxM)
+        self.Y      = Y         # Labels      (NxD)
+        self.C      = C         # Regularization Hypterparameter
+        
+        self.M      = self.X.shape[1]
+        self.W      = np.random.normal(size=(self.M, self.L))   # Input-Hidden Weights (mxL)
+        self.c      = np.random.normal(size=(self.L))           # Bias Vector
+        
+        # Calculating the H matrix
+        self.H      = sigmoid(self.X, self.W, self.c)
+        
+        self.I      = np.eye(self.L, self.L)
+        
+        self.Beta   = np.linalg.inv(self.H.T @ self.H + self.I /self.C) @ self.H.T @ self.Y
+        
+    def predict(self, X):
+        H_pre = sigmoid(X, self.W, self.c)
+        return H_pre @ self.Beta
+   
+# =================================================================================       
+        
+        
+
+
 
 
 # =================================================================================

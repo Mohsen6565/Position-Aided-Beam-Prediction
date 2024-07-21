@@ -1,0 +1,2 @@
+experiment,top-1_val_acc_mean,top-2_val_acc_mean,top-3_val_acc_mean,top-4_val_acc_mean,top-5_val_acc_mean,top-1_test_acc_mean,top-2_test_acc_mean,top-3_test_acc_mean,top-4_test_acc_mean,top-5_test_acc_mean,pwr_mean,top-1_val_acc_std,top-2_val_acc_std,top-3_val_acc_std,top-4_val_acc_std,top-5_val_acc_std,top-1_test_acc_std,top-2_test_acc_std,top-3_test_acc_std,top-4_test_acc_std,top-5_test_acc_std,pwr_std
+LSTM scenario 9 beams 64 norm 1 noise 0,0.0,0.0,0.0,0.0,0.0,36.98,50.75,59.81,66.17,70.37,10.81,0.0,0.0,0.0,0.0,0.0,4.13,5.23,5.71,4.77,4.37,0.09

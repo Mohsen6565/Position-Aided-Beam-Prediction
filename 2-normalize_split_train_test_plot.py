@@ -29,12 +29,13 @@ gathered_data_folder = os.path.join(os.getcwd(), 'Gathered_data3')
 save_folder =  os.path.join(os.getcwd(), f'saved_folder/results_{time.time()}')
 
 # Variables to loop
-ai_strategies = ['LSTM']       # 'KNN', 'LT', 'NN'
+ai_strategies = ['ELM']       # 'KNN', 'LT', 'NN'
+                                 # MOHSEN: 'LSTM', 'ELM'                                
 norm_types = [1]                     # [1,2,3,4,5]                                              XXXXX
 scen_idxs =  [1] # np.arange(1,9+1) # [1,2,3,4,5,6,7,9]
 n_beams_list = [64]          # [8, 16,32,64]
 noises = [0]                         # position noise in meters
-n_reps = 1                           # number repetitions of current settings.
+n_reps = 3                           # number repetitions of current settings.
 
 # Variables constant across simulation
 use_cal_pos_for_scen = [3,4,8,9]      # These scenarios needed calibration.
@@ -47,14 +48,29 @@ force_seed = -1                       # When >= 0, sets data randimzation
                                       # Otherwise, seed = run_idx.
 # Hyperparameters:
 # MOHSEN: LSTM ====================================================================
-nodes_per_lstm_layer    = 256               # Number of hidden states   256
-lstm_layers             = 3                # Number of LSTM layers     1
-lstm_train_batch_size   = 64               # Batch Size                256
-lstm_lr                 = 0.001             # Learning Rate             0.001
-lstm_n_epochs           = 500               # Number of epochs          1000
-lstm_time_window        = 5                # Sequence Length           10
+nodes_per_lstm_layer    = 256               
+lstm_layers             = 3                
+lstm_train_batch_size   = 64               
+lstm_lr                 = 0.001            
+lstm_n_epochs           = 200              
+lstm_time_window        = 10               
 lstm_decay_L2           = None
-lstm_dropout            = 0.1                 # Dropout Percentage        0.75
+lstm_dropout            = 0.5               
+
+# For Scenario 1, 5 
+# nodes_per_lstm_layer    = 512               
+# lstm_layers             = 2                
+# lstm_train_batch_size   = 128               
+# lstm_lr                 = 0.001             
+# lstm_n_epochs           = 250               
+# lstm_time_window        = 5               
+# lstm_decay_L2           = None
+# lstm_dropout            = 0.5                 
+
+# =================================================================================
+# MOHSEN: ELM ====================================================================
+elm_n_hidden_neorons    = 512           # Number of Hidden Neorons
+elm_C                   = 1             # Regularization Hyperparameter
 # =================================================================================
 
 # Neural Network
@@ -220,6 +236,12 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
                 (f'LSTM_nodes_{nodes_per_lstm_layer}_lstm_layers_{lstm_layers}_'+
                  f'batch_{lstm_train_batch_size}_lr{lstm_lr}_decayL2_{lstm_decay_L2}')
         # =================================================================================
+        # MOHSEN ==========================================================================
+        if ai_strategy == 'ELM':
+            n = -1 # ignore this. (for compatibility with other predictors)
+            runs_folder_name    = \
+                (f'ELM_hidden_layer_size{elm_n_hidden_neorons}_C_{elm_C}')
+        # =================================================================================
 
         runs_folder = os.path.join(saved_path, runs_folder_name)
         
@@ -291,7 +313,8 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
                 Y_lstm = []
                 # Getting the window size
                 n_past = lstm_time_window  
-                # Preparing the data
+                # Path of the Best Model
+                BEST_LSTM_MODEL_PATH = os.path.join(run_folder, f"best_model.pth")
                 
                 # Make the data sorted
                 sorted_indices         = np.argsort(beam_data)
@@ -346,6 +369,7 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
                 # REMEMBER TO GET Y_power
                 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
+                print('LSTM Data: ' + 30*'=')
                 print('x_train_LSTM shape == {}'.format(x_train_LSTM.shape))
                 print('x_test_LSTM shape == {}'.format(x_test_LSTM.shape))
                 print('x_val_LSTM shape == {}'.format(x_val_LSTM.shape))
@@ -353,11 +377,43 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
                 print('y_train_LSTM shape == {}'.format(y_train_LSTM.shape))
                 print('y_test_LSTM shape == {}'.format(y_test_LSTM.shape))
                 print('y_val_LSTM shape == {}'.format(y_val_LSTM.shape))
+                print(50*'=')
 
 
             
             # =================================================================================
+            # MOHSEN ==========================================================================
+            # Data Preparation for ELM
+            if ai_strategy == 'ELM': 
+                # Make the data sorted
+                sorted_indices         = np.argsort(beam_data)
+                # sorted_indices         = np.arange(len(beam_data))
+                beam_data_sorted       = beam_data[sorted_indices]
+                pos_norm_sorted        = pos_norm[sorted_indices]
+                # We need One-Hot Encodded Labels
+                one_hot_encoder     = OneHotEncoder(sparse_output=False, dtype=np.float32)
+                beam_data_one_hot   = one_hot_encoder.fit_transform(np.reshape(beam_data_sorted, (beam_data_sorted.shape[0], 1)))
+                
+                x_train_elm     = pos_norm_sorted[train_samples]
+                x_test_elm      = pos_norm_sorted[test_samples]
+                x_val_elm       = pos_norm_sorted[val_samples]
+                
+                y_train_elm     = beam_data_one_hot[train_samples]
+                y_test_elm      = beam_data_sorted[test_samples]
+                y_val_elm       = beam_data_sorted[val_samples]
+                
+                print('ELM Data: ' + 30*'=')
+                print('x_train_elm shape == {}'.format(x_train_elm.shape))
+                print('x_test_elm shape == {}'.format(x_test_elm.shape))
+                print('x_val_elm shape == {}'.format(x_val_elm.shape))
+                print()
+                print('y_train_elm shape == {}'.format(y_train_elm.shape))
+                print('y_test_elm shape == {}'.format(y_test_elm.shape))
+                print('y_val_elm shape == {}'.format(y_val_elm.shape))
+                print(50*'=')
+                
             
+            # =================================================================================
             # MOHSEN ==========================================================================
             print(20*'*' + 'Training Data' + 20*'*')
             # =================================================================================
@@ -458,9 +514,8 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
 
             # Test model on test data
             pred_beams = func.test_net(x_test, trained_model)
-
+        
         # MOHSEN ========================================================================== 
-        # Put the code for LSTM Here
         if ai_strategy == 'LSTM' and run_idx <= n_avgs:
             # if quantize_input:
             #     n_bins = 200
@@ -554,24 +609,50 @@ for scen_idx, n_beams, norm_type, noise, rep in combinations:
                         # Update best_val_loss
                         best_val_loss = val_loss
                         # Save the model parameters
-                        # print('Saving Model to {}'.format(MODEL_PATH))
-                        # torch.save(model.state_dict(), MODEL_PATH + 'best_model.pth')
+                        print('Saving Model to {}'.format(BEST_LSTM_MODEL_PATH))
+                        # torch.save(lstm_model.state_dict(), BEST_LSTM_MODEL_PATH)
+                        torch.save(lstm_model, BEST_LSTM_MODEL_PATH)
                         
                 # scheduler.step(val_loss)
 
                 print(f'Epoch {epoch+1}/{lstm_n_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
                 print('*-'*50)
-
-            # Load weights of best trained model
+                
+            plt.figure(figsize=(10, 10))
+            plt.plot(train_loss_list, label='Training Loss')
+            plt.plot(val_loss_list, label='Validation Loss')
+            plt.legend()
+            plt.savefig(BEST_LSTM_MODEL_PATH + 'LSTM_Training_Process.pdf', bbox_inches='tight')
+            plt.show()
+            
 
             # Test model on test data
             y_test  = y_test_LSTM.cpu().numpy()
             
+            # Loading the best model
+            lstm_model = torch.load(BEST_LSTM_MODEL_PATH)
+            lstm_model.eval()
             
             y_pred     = lstm_model(x_test_LSTM)
             pred_beams = torch.topk(y_pred, y_pred.shape[1])[1]
             pred_beams = pred_beams.cpu().numpy()
 
+        
+        # MOHSEN ========================================================================== 
+        if ai_strategy == 'ELM' and run_idx <= n_avgs:
+            # Initialize the ELM model
+            elm_model   = func.ELM(elm_n_hidden_neorons)
+            
+            # Fit the ELM model to the training data
+            elm_model.fit(x_train_elm, y_train_elm, elm_C)
+            
+            # Inference
+            y_pred = elm_model.predict(x_test_elm)
+            
+            pred_beams = torch.from_numpy(y_pred)
+            pred_beams = torch.topk(pred_beams, pred_beams.shape[1])[1]
+            pred_beams = pred_beams.cpu().numpy()
+            # print(pred_beams)
                 
         # =================================================================================
             

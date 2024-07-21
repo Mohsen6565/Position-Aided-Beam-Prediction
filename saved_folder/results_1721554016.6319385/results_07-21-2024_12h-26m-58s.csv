@@ -1,0 +1,2 @@
+experiment,top-1_val_acc_mean,top-2_val_acc_mean,top-3_val_acc_mean,top-4_val_acc_mean,top-5_val_acc_mean,top-1_test_acc_mean,top-2_test_acc_mean,top-3_test_acc_mean,top-4_test_acc_mean,top-5_test_acc_mean,pwr_mean,top-1_val_acc_std,top-2_val_acc_std,top-3_val_acc_std,top-4_val_acc_std,top-5_val_acc_std,top-1_test_acc_std,top-2_test_acc_std,top-3_test_acc_std,top-4_test_acc_std,top-5_test_acc_std,pwr_std
+ELM scenario 9 beams 64 norm 1 noise 0,0.0,0.0,0.0,0.0,0.0,0.41,2.85,4.33,6.62,8.83,12.95,0.0,0.0,0.0,0.0,0.0,0.08,0.4,0.5,0.71,0.76,0.11

@@ -1,0 +1,9 @@
+Test Results: 
+Top-1 average accuracy 18.74 % and standard deviation 0.3551 %.
+Top-2 average accuracy 26.07 % and standard deviation 0.4365 %.
+Top-3 average accuracy 31.54 % and standard deviation 0.3232 %.
+Top-4 average accuracy 36.07 % and standard deviation 0.3618 %.
+Top-5 average accuracy 39.90 % and standard deviation 0.1226 %.
+
+Power Loss results
+Mean:11.59, STD: 0.1043 
